@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, status
+import sqlalchemy
+from fastapi import FastAPI, Depends, status, HTTPException
 
 from database import get_db
 from sqlalchemy.orm import Session
@@ -6,16 +7,27 @@ from sqlalchemy.sql import select
 
 from model import User, Organization
 
+from pydantic import BaseModel
+
 app = FastAPI()
 
 
+class CreateUserRequestSchema(BaseModel):
+    name: str | None
+    email: str
+    password: str
+
 @app.post('/users', status_code=status.HTTP_201_CREATED)
-async def create_user(data: dict, db: Session = Depends(get_db)):
+async def create_user(data: CreateUserRequestSchema, db: Session = Depends(get_db)):
     print(data)
-    user = User(**data)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        user = User(**data.dict())
+    # user = data.from_orm()
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except sqlalchemy.exc.IntegrityError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already exist")
     return user
 
 
